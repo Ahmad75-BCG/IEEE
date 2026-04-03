@@ -1,0 +1,2552 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Energy Dashboard | لوحة تحكم الطاقة الذكية</title>
+  
+ 
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+ 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script>
+   
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            background: '#1a1a1a',
+            foreground: '#f5f5f5',
+            card: '#242424',
+            'card-foreground': '#f5f5f5',
+            primary: '#f97316',
+            'primary-foreground': '#1a1a1a',
+            secondary: '#2a2a2a',
+            'secondary-foreground': '#f5f5f5',
+            muted: '#2a2a2a',
+            'muted-foreground': '#a3a3a3',
+            border: '#3a3a3a',
+            accent: '#f97316',
+          },
+          fontFamily: {
+            'sans-en': ['Inter', 'sans-serif'],
+            'sans-ar': ['Cairo', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+   
+    body {
+      background-color: #1a1a1a;
+      color: #f5f5f5;
+    }
+    
+    
+    [dir="rtl"] {
+      font-family: 'Cairo', sans-serif;
+    }
+    
+    [dir="ltr"] {
+      font-family: 'Inter', sans-serif;
+    }
+    
+    
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #242424;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #3a3a3a;
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4a4a4a;
+    }
+    
+  
+    .sidebar {
+      transition: width 0.3s ease;
+    }
+    
+    .sidebar.collapsed {
+      width: 64px;
+    }
+    
+    .sidebar.collapsed .sidebar-text {
+      display: none;
+    }
+    
+    
+    .card-hover:hover {
+      border-color: #f97316;
+      transform: translateY(-2px);
+      transition: all 0.2s ease;
+    }
+    
+  
+    .room-item.active {
+      background-color: rgba(249, 115, 22, 0.2);
+      border-left: 3px solid #f97316;
+    }
+    
+    [dir="rtl"] .room-item.active {
+      border-left: none;
+      border-right: 3px solid #f97316;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-background text-foreground">
+  
+  <!-- ============================================================
+       MAIN LAYOUT STRUCTURE
+       ============================================================
+       The dashboard consists of:
+       1. Sidebar (collapsible) - Navigation and room selection
+       2. Main Content Area - Dashboard views and analytics
+       
+       DATA INTEGRATION POINTS:
+       - See window.EnergyDashboard.updateData() for updating all data
+       - See API_ENDPOINTS configuration for backend integration
+       - See WebSocket section for real-time updates
+       ============================================================ -->
+  
+  <div class="flex min-h-screen">
+    
+    <!-- ========================================
+         SIDEBAR COMPONENT
+         ========================================
+         Features:
+         - Collapsible (toggle with button)
+         - Section management (add/edit/delete)
+         - Room management (add/edit/delete)
+         - Language toggle
+         
+         DATA BINDING:
+         - Sections and rooms are rendered from window.dashboardData.sections
+         - Call renderSidebar() after data updates
+         ======================================== -->
+    <aside id="sidebar" class="sidebar w-64 bg-[#141414] border-r border-border flex flex-col h-screen sticky top-0">
+      
+      <!-- Sidebar Header -->
+      <div class="p-4 border-b border-border flex items-center justify-between">
+        <div class="flex items-center gap-3 sidebar-text">
+          <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+            <i data-lucide="zap" class="w-5 h-5 text-primary-foreground"></i>
+          </div>
+          <span class="font-bold text-lg" data-i18n="appTitle">Energy Hub</span>
+        </div>
+        <button id="toggleSidebar" class="p-2 hover:bg-secondary rounded-lg transition-colors">
+          <i data-lucide="panel-left-close" class="w-5 h-5"></i>
+        </button>
+      </div>
+      
+      <!-- Language Toggle -->
+      <div class="p-4 border-b border-border sidebar-text">
+        <button id="langToggle" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors">
+          <i data-lucide="languages" class="w-4 h-4"></i>
+          <span data-i18n="switchLang">العربية</span>
+        </button>
+      </div>
+      
+      <!-- Navigation -->
+      <nav class="flex-1 overflow-y-auto p-4">
+        
+        <!-- Total Dashboard Button -->
+        <button id="totalDashboardBtn" class="w-full flex items-center gap-3 px-3 py-2 mb-4 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors">
+          <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+          <span class="sidebar-text" data-i18n="totalDashboard">Total Dashboard</span>
+        </button>
+        
+        <!-- Sections Container -->
+        <div id="sectionsContainer" class="space-y-2">
+          <!-- Sections will be rendered here by JavaScript -->
+        </div>
+        
+        <!-- Add Section Button -->
+        <button id="addSectionBtn" class="w-full flex items-center gap-3 px-3 py-2 mt-4 border border-dashed border-border hover:border-primary hover:text-primary rounded-lg transition-colors sidebar-text">
+          <i data-lucide="plus" class="w-5 h-5"></i>
+          <span data-i18n="addSection">Add Section</span>
+        </button>
+      </nav>
+      
+      <!-- Sidebar Footer -->
+      <div class="p-4 border-t border-border sidebar-text">
+        <div class="flex items-center gap-3 text-muted-foreground text-sm">
+          <i data-lucide="info" class="w-4 h-4"></i>
+          <span data-i18n="version">v1.0.0</span>
+        </div>
+      </div>
+    </aside>
+    
+    <!-- ========================================
+         MAIN CONTENT AREA
+         ========================================
+         Contains:
+         1. Total Dashboard View (default)
+         2. Room Detail View (when room selected)
+         
+         DATA BINDING:
+         - Total view: aggregates all sections/rooms data
+         - Room view: shows specific room analytics
+         ======================================== -->
+    <main class="flex-1 overflow-auto">
+      
+      <!-- ========================================
+           TOTAL DASHBOARD VIEW
+           ========================================
+           Shows aggregated data from all sections/rooms
+           
+           KPI CARDS DATA MAPPING:
+           - totalEnergy: window.dashboardData.totals.energy
+           - totalCO2: window.dashboardData.totals.co2
+           - avgOccupancy: window.dashboardData.totals.occupancy
+           - totalSavings: window.dashboardData.totals.savings
+           ======================================== -->
+      <div id="totalDashboardView" class="min-h-screen">
+        
+        <!-- Header -->
+        <header class="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border p-4 md:p-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 class="text-2xl md:text-3xl font-bold" data-i18n="totalDashboardTitle">Energy Overview</h1>
+              <p class="text-muted-foreground mt-1" data-i18n="totalDashboardDesc">Real-time energy monitoring across all facilities</p>
+            </div>
+            
+            <!-- Date Range Picker -->
+            <div class="flex flex-wrap items-center gap-3">
+              <!-- Quick Range Buttons -->
+              <div class="flex items-center gap-2">
+                <button class="time-range-btn active px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium" data-range="day" data-i18n="daily">Daily</button>
+                <button class="time-range-btn px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-sm font-medium" data-range="week" data-i18n="weekly">Weekly</button>
+                <button class="time-range-btn px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-sm font-medium" data-range="month" data-i18n="monthly">Monthly</button>
+                <button class="time-range-btn px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-sm font-medium" data-range="year" data-i18n="yearly">Yearly</button>
+              </div>
+              
+              <!-- Custom Date Range -->
+              <div class="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-lg">
+                <i data-lucide="calendar" class="w-4 h-4 text-muted-foreground"></i>
+                <input type="date" id="startDate" class="bg-transparent text-sm border-none focus:outline-none w-32" />
+                <span class="text-muted-foreground">-</span>
+                <input type="date" id="endDate" class="bg-transparent text-sm border-none focus:outline-none w-32" />
+                <button id="applyDateRange" class="px-2 py-1 bg-primary text-primary-foreground rounded text-xs hover:bg-primary/90" data-i18n="apply">Apply</button>
+              </div>
+            </div>
+          </div>
+        </header>
+        
+        <!-- Dashboard Content -->
+        <div class="p-4 md:p-6 space-y-6">
+          
+          <!-- KPI Cards Grid -->
+          <!-- ========================================
+               KPI CARDS
+               ========================================
+               Each card displays a key metric
+               
+               TO UPDATE DATA:
+               Call updateKPICards(data) where data = {
+                 energy: number,      // Total kWh
+                 co2: number,         // Total kg CO2
+                 occupancy: number,   // Average %
+                 savings: number      // Total %
+               }
+               ======================================== -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- Total Energy Card -->
+            <div class="card-hover bg-card border border-border rounded-xl p-4 md:p-6">
+              <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center">
+                  <i data-lucide="zap" class="w-6 h-6 text-primary"></i>
+                </div>
+                <span class="text-xs text-green-500 flex items-center gap-1">
+                  <i data-lucide="trending-down" class="w-3 h-3"></i>
+                  -12%
+                </span>
+              </div>
+              <p id="kpiEnergy" class="text-2xl md:text-3xl font-bold">0</p>
+              <p class="text-muted-foreground text-sm mt-1" data-i18n="totalEnergy">Total Energy (kWh)</p>
+            </div>
+            
+            <!-- CO2 Emissions Card -->
+            <div class="card-hover bg-card border border-border rounded-xl p-4 md:p-6">
+              <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                  <i data-lucide="leaf" class="w-6 h-6 text-emerald-500"></i>
+                </div>
+                <span class="text-xs text-green-500 flex items-center gap-1">
+                  <i data-lucide="trending-down" class="w-3 h-3"></i>
+                  -8%
+                </span>
+              </div>
+              <p id="kpiCO2" class="text-2xl md:text-3xl font-bold">0</p>
+              <p class="text-muted-foreground text-sm mt-1" data-i18n="totalCO2">CO2 Emissions (kg)</p>
+            </div>
+            
+            <!-- Occupancy Card -->
+            <div class="card-hover bg-card border border-border rounded-xl p-4 md:p-6">
+              <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                  <i data-lucide="users" class="w-6 h-6 text-blue-500"></i>
+                </div>
+                <span class="text-xs text-muted-foreground flex items-center gap-1">
+                  <i data-lucide="minus" class="w-3 h-3"></i>
+                  0%
+                </span>
+              </div>
+              <p id="kpiOccupancy" class="text-2xl md:text-3xl font-bold">0%</p>
+              <p class="text-muted-foreground text-sm mt-1" data-i18n="avgOccupancy">Avg Occupancy</p>
+            </div>
+            
+            <!-- Savings Card -->
+            <div class="card-hover bg-card border border-border rounded-xl p-4 md:p-6">
+              <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
+                  <i data-lucide="piggy-bank" class="w-6 h-6 text-amber-500"></i>
+                </div>
+                <span class="text-xs text-green-500 flex items-center gap-1">
+                  <i data-lucide="trending-up" class="w-3 h-3"></i>
+                  +5%
+                </span>
+              </div>
+              <p id="kpiSavings" class="text-2xl md:text-3xl font-bold">0%</p>
+              <p class="text-muted-foreground text-sm mt-1" data-i18n="totalSavings">Energy Savings</p>
+            </div>
+          </div>
+          
+          <!-- Charts Row -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Energy Consumption Chart -->
+            <!-- ========================================
+                 ENERGY CHART
+                 ========================================
+                 Line/Bar chart showing energy over time
+                 
+                 TO UPDATE:
+                 Call updateEnergyChart(data) where data = [
+                   { label: "00:00", value: 120 },
+                   { label: "01:00", value: 95 },
+                   ...
+                 ]
+                 ======================================== -->
+            <div class="bg-card border border-border rounded-xl p-4 md:p-6">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-lg" data-i18n="energyConsumption">Energy Consumption</h3>
+                <div class="flex items-center gap-2">
+                  <button class="chart-type-btn active px-3 py-1 text-xs rounded bg-primary text-primary-foreground" data-type="line">Line</button>
+                  <button class="chart-type-btn px-3 py-1 text-xs rounded bg-secondary" data-type="bar">Bar</button>
+                </div>
+              </div>
+              <div class="h-64">
+                <canvas id="energyChart"></canvas>
+              </div>
+            </div>
+            
+            <!-- Occupancy Chart -->
+            <!-- ========================================
+                 OCCUPANCY CHART
+                 ========================================
+                 Area chart showing occupancy over time
+                 
+                 TO UPDATE:
+                 Call updateOccupancyChart(data) where data = [
+                   { label: "00:00", value: 45 },
+                   { label: "01:00", value: 30 },
+                   ...
+                 ]
+                 ======================================== -->
+            <div class="bg-card border border-border rounded-xl p-4 md:p-6">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-lg" data-i18n="occupancyTrend">Occupancy Trend</h3>
+                <span class="text-xs text-muted-foreground" data-i18n="last24h">Last 24 hours</span>
+              </div>
+              <div class="h-64">
+                <canvas id="occupancyChart"></canvas>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Sections Overview & AI Insights -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Sections Overview -->
+            <!-- ========================================
+                 SECTIONS OVERVIEW TABLE
+                 ========================================
+                 Shows summary for each section
+                 
+                 TO UPDATE:
+                 Call renderSectionsTable(sections) where sections = [
+                   { name: "Building A", energy: 1200, rooms: 5, status: "normal" },
+                   ...
+                 ]
+                 ======================================== -->
+            <div class="lg:col-span-2 bg-card border border-border rounded-xl p-4 md:p-6">
+              <h3 class="font-semibold text-lg mb-4" data-i18n="sectionsOverview">Sections Overview</h3>
+              <div class="overflow-x-auto">
+                <table class="w-full">
+                  <thead>
+                    <tr class="text-left text-muted-foreground text-sm border-b border-border">
+                      <th class="pb-3 font-medium" data-i18n="sectionName">Section</th>
+                      <th class="pb-3 font-medium" data-i18n="rooms">Rooms</th>
+                      <th class="pb-3 font-medium" data-i18n="energy">Energy</th>
+                      <th class="pb-3 font-medium" data-i18n="status">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sectionsTableBody">
+                    <!-- Rows rendered by JavaScript -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <!-- AI Insights Panel -->
+            <!-- ========================================
+                 AI INSIGHTS PANEL
+                 ========================================
+                 Displays AI-generated recommendations
+                 
+                 TO UPDATE:
+                 Call updateAIInsights(insights) where insights = [
+                   {
+                     type: "warning" | "success" | "info",
+                     title: "High consumption detected",
+                     description: "Server Room using 40% more than average",
+                     action: "Review cooling system"
+                   },
+                   ...
+                 ]
+                 ======================================== -->
+            <div class="bg-card border border-border rounded-xl p-4 md:p-6">
+              <div class="flex items-center gap-2 mb-4">
+                <div class="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">
+                  <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>
+                </div>
+                <h3 class="font-semibold text-lg" data-i18n="aiInsights">AI Insights</h3>
+              </div>
+              <div id="aiInsightsContainer" class="space-y-3">
+                <!-- Insights rendered by JavaScript -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- ========================================
+           ROOM DETAIL VIEW
+           ========================================
+           Shows detailed analytics for a specific room
+           Hidden by default, shown when room is selected
+           
+           DATA BINDING:
+           Call showRoomDetail(roomData) where roomData = {
+             id: "room-1",
+             name: "Conference Room",
+             sectionName: "Building A",
+             energy: 450,
+             co2: 120,
+             occupancy: 65,
+             savings: 12,
+             hourlyData: [...],
+             devices: [...],
+             alerts: [...]
+           }
+           ======================================== -->
+      <div id="roomDetailView" class="min-h-screen hidden">
+        
+        <!-- Room Header -->
+        <header class="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border p-4 md:p-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <button id="backToTotal" class="p-2 hover:bg-secondary rounded-lg transition-colors">
+                <i data-lucide="arrow-left" class="w-5 h-5 rtl-flip"></i>
+              </button>
+              <div>
+                <h1 id="roomTitle" class="text-2xl md:text-3xl font-bold">Room Name</h1>
+                <p id="roomSection" class="text-muted-foreground mt-1">Section Name</p>
+              </div>
+            </div>
+            
+            <!-- Room Date Range Picker -->
+            <div class="flex flex-wrap items-center gap-3">
+              <div class="flex items-center gap-2">
+                <button class="room-time-range-btn active px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium" data-range="day" data-i18n="daily">Daily</button>
+                <button class="room-time-range-btn px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-sm font-medium" data-range="week" data-i18n="weekly">Weekly</button>
+                <button class="room-time-range-btn px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-sm font-medium" data-range="month" data-i18n="monthly">Monthly</button>
+                <button class="room-time-range-btn px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-sm font-medium" data-range="year" data-i18n="yearly">Yearly</button>
+              </div>
+              
+              <div class="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-lg">
+                <i data-lucide="calendar" class="w-4 h-4 text-muted-foreground"></i>
+                <input type="date" id="roomStartDate" class="bg-transparent text-sm border-none focus:outline-none w-32" />
+                <span class="text-muted-foreground">-</span>
+                <input type="date" id="roomEndDate" class="bg-transparent text-sm border-none focus:outline-none w-32" />
+                <button id="applyRoomDateRange" class="px-2 py-1 bg-primary text-primary-foreground rounded text-xs hover:bg-primary/90" data-i18n="apply">Apply</button>
+              </div>
+            </div>
+          </div>
+        </header>
+        
+        <!-- Room Content -->
+        <div class="p-4 md:p-6 space-y-6">
+          
+          <!-- Room KPI Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-card border border-border rounded-xl p-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center">
+                  <i data-lucide="zap" class="w-5 h-5 text-primary"></i>
+                </div>
+                <div>
+                  <p id="roomEnergy" class="text-xl font-bold">0</p>
+                  <p class="text-muted-foreground text-xs" data-i18n="energyKwh">Energy (kWh)</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-card border border-border rounded-xl p-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                  <i data-lucide="leaf" class="w-5 h-5 text-emerald-500"></i>
+                </div>
+                <div>
+                  <p id="roomCO2" class="text-xl font-bold">0</p>
+                  <p class="text-muted-foreground text-xs" data-i18n="co2Kg">CO2 (kg)</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-card border border-border rounded-xl p-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                  <i data-lucide="users" class="w-5 h-5 text-blue-500"></i>
+                </div>
+                <div>
+                  <p id="roomOccupancy" class="text-xl font-bold">0%</p>
+                  <p class="text-muted-foreground text-xs" data-i18n="occupancy">Occupancy</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-card border border-border rounded-xl p-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center">
+                  <i data-lucide="piggy-bank" class="w-5 h-5 text-amber-500"></i>
+                </div>
+                <div>
+                  <p id="roomSavings" class="text-xl font-bold">0%</p>
+                  <p class="text-muted-foreground text-xs" data-i18n="savings">Savings</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Room Charts -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-card border border-border rounded-xl p-4 md:p-6">
+              <h3 class="font-semibold mb-4" data-i18n="hourlyConsumption">Hourly Consumption</h3>
+              <div class="h-64">
+                <canvas id="roomEnergyChart"></canvas>
+              </div>
+            </div>
+            <div class="bg-card border border-border rounded-xl p-4 md:p-6">
+              <h3 class="font-semibold mb-4" data-i18n="hourlyOccupancy">Hourly Occupancy</h3>
+              <div class="h-64">
+                <canvas id="roomOccupancyChart"></canvas>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Room AI Recommendations -->
+          <div class="bg-card border border-border rounded-xl p-4 md:p-6">
+            <div class="flex items-center gap-2 mb-4">
+              <i data-lucide="lightbulb" class="w-5 h-5 text-primary"></i>
+              <h3 class="font-semibold" data-i18n="recommendations">AI Recommendations</h3>
+            </div>
+            <div id="roomRecommendations" class="space-y-3">
+              <!-- Recommendations rendered by JavaScript -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- ========================================
+       MODAL DIALOGS
+       ======================================== -->
+  
+  <!-- Add/Edit Section Modal -->
+  <div id="sectionModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeSectionModal()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-card border border-border rounded-xl p-6">
+      <h3 id="sectionModalTitle" class="text-lg font-semibold mb-4" data-i18n="addSection">Add Section</h3>
+      <input type="text" id="sectionNameInput" class="w-full px-4 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Section name">
+      <div class="flex justify-end gap-3 mt-6">
+        <button onclick="closeSectionModal()" class="px-4 py-2 bg-secondary hover:bg-secondary/80 rounded-lg" data-i18n="cancel">Cancel</button>
+        <button onclick="saveSection()" class="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg" data-i18n="save">Save</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Add/Edit Room Modal -->
+  <div id="roomModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeRoomModal()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-card border border-border rounded-xl p-6">
+      <h3 id="roomModalTitle" class="text-lg font-semibold mb-4" data-i18n="addRoom">Add Room</h3>
+      <input type="text" id="roomNameInput" class="w-full px-4 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Room name">
+      <div class="flex justify-end gap-3 mt-6">
+        <button onclick="closeRoomModal()" class="px-4 py-2 bg-secondary hover:bg-secondary/80 rounded-lg" data-i18n="cancel">Cancel</button>
+        <button onclick="saveRoom()" class="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg" data-i18n="save">Save</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- ============================================================
+       JAVASCRIPT - DATA & LOGIC
+       ============================================================ -->
+  <script>
+    /**
+     * ============================================================
+     * CONFIGURATION & API ENDPOINTS
+     * ============================================================
+     * Configure these endpoints to connect to your backend/AI model
+     */
+    const API_CONFIG = {
+      // Base URL for your backend API
+      baseUrl: '', // e.g., 'https://api.yourserver.com'
+      
+      // API Endpoints - Update these to match your backend
+      endpoints: {
+        // GET - Fetch all sections and rooms data
+        getSections: '/api/sections',
+        
+        // GET - Fetch specific room data
+        getRoom: '/api/rooms/{roomId}',
+        
+        // GET - Fetch energy data with time range
+        getEnergyData: '/api/energy?range={range}',
+        
+        // GET - Fetch AI insights/recommendations
+        getAIInsights: '/api/ai/insights',
+        
+        // POST - Create new section
+        createSection: '/api/sections',
+        
+        // PUT - Update section
+        updateSection: '/api/sections/{sectionId}',
+        
+        // DELETE - Delete section
+        deleteSection: '/api/sections/{sectionId}',
+        
+        // POST - Create new room
+        createRoom: '/api/sections/{sectionId}/rooms',
+        
+        // PUT - Update room
+        updateRoom: '/api/rooms/{roomId}',
+        
+        // DELETE - Delete room
+        deleteRoom: '/api/rooms/{roomId}',
+      },
+      
+      // WebSocket URL for real-time updates (optional)
+      websocketUrl: '', // e.g., 'wss://api.yourserver.com/ws'
+      
+      // Authentication headers
+      headers: {
+        'Content-Type': 'application/json',
+        // 'Authorization': 'Bearer YOUR_TOKEN'
+      }
+    };
+    
+    /**
+     * ============================================================
+     * INTERNATIONALIZATION (i18n) - TRANSLATIONS
+     * ============================================================
+     * Add more translations as needed
+     */
+    const translations = {
+      en: {
+        appTitle: 'Energy Hub',
+        switchLang: 'العربية',
+        totalDashboard: 'Total Dashboard',
+        totalDashboardTitle: 'Energy Overview',
+        totalDashboardDesc: 'Real-time energy monitoring across all facilities',
+        addSection: 'Add Section',
+        addRoom: 'Add Room',
+        editSection: 'Edit Section',
+        editRoom: 'Edit Room',
+        deleteSection: 'Delete Section',
+        deleteRoom: 'Delete Room',
+        daily: 'Daily',
+        weekly: 'Weekly',
+        monthly: 'Monthly',
+        yearly: 'Yearly',
+        totalEnergy: 'Total Energy (kWh)',
+        totalCO2: 'CO2 Emissions (kg)',
+        avgOccupancy: 'Avg Occupancy',
+        totalSavings: 'Energy Savings',
+        energyConsumption: 'Energy Consumption',
+        occupancyTrend: 'Occupancy Trend',
+        last24h: 'Last 24 hours',
+        sectionsOverview: 'Sections Overview',
+        sectionName: 'Section',
+        rooms: 'Rooms',
+        energy: 'Energy',
+        status: 'Status',
+        aiInsights: 'AI Insights',
+        energyKwh: 'Energy (kWh)',
+        co2Kg: 'CO2 (kg)',
+        occupancy: 'Occupancy',
+        savings: 'Savings',
+        hourlyConsumption: 'Hourly Consumption',
+        hourlyOccupancy: 'Hourly Occupancy',
+        recommendations: 'AI Recommendations',
+        cancel: 'Cancel',
+        save: 'Save',
+        version: 'v1.0.0',
+        normal: 'Normal',
+        warning: 'Warning',
+        critical: 'Critical',
+        viewDetails: 'View Details',
+        back: 'Back',
+        apply: 'Apply',
+        from: 'From',
+        to: 'To',
+        selectDateRange: 'Select Date Range',
+        dataFor: 'Data for',
+        lastWeek: 'Last Week',
+        lastMonth: 'Last Month',
+        last3Months: 'Last 3 Months',
+        last6Months: 'Last 6 Months',
+        lastYear: 'Last Year',
+        customRange: 'Custom Range',
+        noDataForPeriod: 'No data available for this period',
+        january: 'January',
+        february: 'February',
+        march: 'March',
+        april: 'April',
+        may: 'May',
+        june: 'June',
+        july: 'July',
+        august: 'August',
+        september: 'September',
+        october: 'October',
+        november: 'November',
+        december: 'December',
+      },
+      ar: {
+        appTitle: 'مركز الطاقة',
+        switchLang: 'English',
+        totalDashboard: 'لوحة التحكم الكلية',
+        totalDashboardTitle: 'نظرة عامة على الطاقة',
+        totalDashboardDesc: 'مراقبة الطاقة في الوقت الفعلي عبر جميع المرافق',
+        addSection: 'إضافة قسم',
+        addRoom: 'إضافة غرفة',
+        editSection: 'تعديل القسم',
+        editRoom: 'تعديل الغرفة',
+        deleteSection: 'حذف القسم',
+        deleteRoom: 'حذف الغرفة',
+        daily: 'يومي',
+        weekly: 'أسبوعي',
+        monthly: 'شهري',
+        yearly: 'سنوي',
+        totalEnergy: 'إجمالي الطاقة (كيلوواط)',
+        totalCO2: 'انبعاثات CO2 (كجم)',
+        avgOccupancy: 'متوسط الإشغال',
+        totalSavings: 'توفير الطاقة',
+        energyConsumption: 'استهلاك الطاقة',
+        occupancyTrend: 'اتجاه الإشغال',
+        last24h: 'آخر 24 ساعة',
+        sectionsOverview: 'نظرة عامة على الأقسام',
+        sectionName: 'القسم',
+        rooms: 'الغرف',
+        energy: 'الطاقة',
+        status: 'الحالة',
+        aiInsights: 'رؤى الذكاء الاصطناعي',
+        energyKwh: 'الطاقة (كيلوواط)',
+        co2Kg: 'CO2 (كجم)',
+        occupancy: 'الإشغال',
+        savings: 'التوفير',
+        hourlyConsumption: 'الاستهلاك بالساعة',
+        hourlyOccupancy: 'الإشغال بالساعة',
+        recommendations: 'توصيات ��لذكاء الاصطناعي',
+        cancel: 'إلغاء',
+        save: 'حفظ',
+        version: 'الإصدار 1.0.0',
+        normal: 'طبيعي',
+        warning: 'تحذير',
+        critical: 'حرج',
+        viewDetails: 'عرض التفاصيل',
+        back: 'رجوع',
+        apply: 'تطبيق',
+        from: 'من',
+        to: 'إلى',
+        selectDateRange: 'اختر نطاق التاريخ',
+        dataFor: 'بيانات',
+        lastWeek: 'آخر أسبوع',
+        lastMonth: 'آخر شهر',
+        last3Months: 'آخر 3 أشهر',
+        last6Months: 'آخر 6 أشهر',
+        lastYear: 'آخر سنة',
+        customRange: 'نطاق مخصص',
+        noDataForPeriod: 'لا توجد بيانات لهذه الفترة',
+        january: 'يناير',
+        february: 'فبراير',
+        march: 'مارس',
+        april: 'أبريل',
+        may: 'مايو',
+        june: 'يونيو',
+        july: 'يوليو',
+        august: 'أغسطس',
+        september: 'سبتمبر',
+        october: 'أكتوبر',
+        november: 'نوفمبر',
+        december: 'ديسمبر',
+      }
+    };
+    
+    /**
+     * ============================================================
+     * GLOBAL STATE
+     * ============================================================
+     * This object holds all dashboard data
+     * Update this via API calls or WebSocket messages
+     */
+    let currentLang = 'en';
+    let selectedTimeRange = 'day';
+    let selectedRoom = null;
+    let editingSection = null;
+    let editingRoom = null;
+    let editingSectionId = null;
+    
+    // Date range state
+    let selectedStartDate = null;
+    let selectedEndDate = null;
+    let roomSelectedTimeRange = 'day';
+    let roomSelectedStartDate = null;
+    let roomSelectedEndDate = null;
+    
+    /**
+     * MAIN DATA STRUCTURE
+     * -------------------
+     * This is the primary data object that drives the dashboard.
+     * 
+     * TO INTEGRATE WITH BACKEND:
+     * 1. Fetch data from your API
+     * 2. Map the response to this structure
+     * 3. Call window.EnergyDashboard.updateData(newData)
+     * 
+     * TO INTEGRATE WITH AI MODEL:
+     * 1. Send current data to your AI model
+     * 2. Receive insights/predictions
+     * 3. Call updateAIInsights(insights)
+     */
+    window.dashboardData = {
+      // Aggregated totals (calculated from sections)
+      totals: {
+        energy: 0,
+        co2: 0,
+        occupancy: 0,
+        savings: 0
+      },
+      
+      // Sections and rooms hierarchy
+      sections: [
+        {
+          id: 'section-1',
+          name: 'Building A',
+          isExpanded: true,
+          rooms: [
+            {
+              id: 'room-1',
+              name: 'Conference Room',
+              data: {
+                energy: 450,
+                co2: 120,
+                occupancy: 65,
+                savings: 12,
+                // Hourly data for charts (24 data points)
+                hourlyData: generateHourlyData()
+              }
+            },
+            {
+              id: 'room-2',
+              name: 'Open Office',
+              data: {
+                energy: 680,
+                co2: 180,
+                occupancy: 82,
+                savings: 8,
+                hourlyData: generateHourlyData()
+              }
+            },
+            {
+              id: 'room-3',
+              name: 'Server Room',
+              data: {
+                energy: 1200,
+                co2: 320,
+                occupancy: 5,
+                savings: 15,
+                hourlyData: generateHourlyData()
+              }
+            }
+          ]
+        },
+        {
+          id: 'section-2',
+          name: 'Building B',
+          isExpanded: false,
+          rooms: [
+            {
+              id: 'room-4',
+              name: 'Lobby',
+              data: {
+                energy: 280,
+                co2: 75,
+                occupancy: 45,
+                savings: 20,
+                hourlyData: generateHourlyData()
+              }
+            },
+            {
+              id: 'room-5',
+              name: 'Cafeteria',
+              data: {
+                energy: 520,
+                co2: 140,
+                occupancy: 60,
+                savings: 10,
+                hourlyData: generateHourlyData()
+              }
+            }
+          ]
+        }
+      ],
+      
+      // AI-generated insights
+      aiInsights: [
+        {
+          type: 'warning',
+          title: 'High Energy Usage',
+          titleAr: 'استهلاك طاقة مرتفع',
+          description: 'Server Room consuming 40% more than baseline',
+          descriptionAr: 'غرفة الخوادم تستهلك 40% أكثر من المعدل',
+          action: 'Check cooling system',
+          actionAr: 'تحقق من نظام التبريد'
+        },
+        {
+          type: 'success',
+          title: 'Efficiency Improved',
+          titleAr: 'تحسن الكفاءة',
+          description: 'Building B reduced consumption by 15%',
+          descriptionAr: 'المبنى ب قلل الاستهلاك بنسبة 15%',
+          action: 'Apply to other buildings',
+          actionAr: 'طبق على المباني الأخرى'
+        },
+        {
+          type: 'info',
+          title: 'Peak Hours Detected',
+          titleAr: 'ساعات الذروة',
+          description: 'Highest usage between 9AM-11AM',
+          descriptionAr: 'أعلى استهلاك بين 9 صباحاً و 11 صباحاً',
+          action: 'Consider load balancing',
+          actionAr: 'فكر في توزيع الحمل'
+        }
+      ]
+    };
+    
+    /**
+     * Generate sample hourly data
+     * Replace with actual data from backend
+     */
+    function generateHourlyData() {
+      return Array.from({ length: 24 }, (_, hour) => ({
+        hour: hour,
+        energy: Math.floor(50 + Math.sin(hour / 3) * 30 + Math.random() * 20),
+        occupancy: Math.floor(hour >= 8 && hour <= 18 ? 50 + Math.random() * 40 : Math.random() * 20)
+      }));
+    }
+    
+    /**
+     * Generate sample daily data for a week
+     * Replace with actual data from backend
+     */
+    function generateWeeklyData() {
+      const days = currentLang === 'ar' 
+        ? ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+        : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      return days.map((day, i) => ({
+        label: day,
+        energy: Math.floor(400 + Math.sin(i) * 150 + Math.random() * 100),
+        occupancy: Math.floor(40 + Math.random() * 40)
+      }));
+    }
+    
+    /**
+     * Generate sample monthly data
+     * Replace with actual data from backend
+     */
+    function generateMonthlyData() {
+      return Array.from({ length: 30 }, (_, i) => ({
+        label: (i + 1).toString(),
+        energy: Math.floor(300 + Math.sin(i / 5) * 100 + Math.random() * 50),
+        occupancy: Math.floor(35 + Math.random() * 45)
+      }));
+    }
+    
+    /**
+     * Generate sample yearly data (12 months)
+     * Replace with actual data from backend
+     */
+    function generateYearlyData() {
+      const months = currentLang === 'ar'
+        ? ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+        : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return months.map((month, i) => ({
+        label: month,
+        energy: Math.floor(8000 + Math.sin(i / 2) * 3000 + Math.random() * 1000),
+        occupancy: Math.floor(45 + Math.sin(i / 3) * 15 + Math.random() * 10)
+      }));
+    }
+    
+    /**
+     * Generate data for custom date range
+     * @param {Date} startDate - Start date
+     * @param {Date} endDate - End date
+     * @returns {Array} Data points for the range
+     * 
+     * BACKEND INTEGRATION:
+     * Replace this function with actual API call:
+     * ```javascript
+     * async function getDataForDateRange(startDate, endDate, roomId = null) {
+     *   const params = new URLSearchParams({
+     *     start: startDate.toISOString(),
+     *     end: endDate.toISOString(),
+     *     ...(roomId && { roomId })
+     *   });
+     *   const response = await fetch(`/api/energy/range?${params}`);
+     *   return response.json();
+     * }
+     * ```
+     */
+    function generateCustomRangeData(startDate, endDate) {
+      const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+      const data = [];
+      
+      for (let i = 0; i < days; i++) {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + i);
+        data.push({
+          label: date.toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : 'en-US', { 
+            month: 'short', 
+            day: 'numeric' 
+          }),
+          date: date.toISOString().split('T')[0],
+          energy: Math.floor(300 + Math.sin(i / 5) * 100 + Math.random() * 50),
+          occupancy: Math.floor(35 + Math.random() * 45)
+        });
+      }
+      
+      return data;
+    }
+    
+    /**
+     * ============================================================
+     * CHART INSTANCES
+     * ============================================================
+     */
+    let energyChart = null;
+    let occupancyChart = null;
+    let roomEnergyChart = null;
+    let roomOccupancyChart = null;
+    
+    /**
+     * Chart.js default configuration
+     */
+    const chartDefaults = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            color: '#3a3a3a'
+          },
+          ticks: {
+            color: '#a3a3a3'
+          }
+        },
+        y: {
+          grid: {
+            color: '#3a3a3a'
+          },
+          ticks: {
+            color: '#a3a3a3'
+          }
+        }
+      }
+    };
+    
+    /**
+     * ============================================================
+     * INITIALIZATION
+     * ============================================================
+     */
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize Lucide icons
+      lucide.createIcons();
+      
+      // Initialize charts
+      initCharts();
+      
+      // Render initial UI
+      renderSidebar();
+      calculateTotals();
+      updateKPICards();
+      renderSectionsTable();
+      renderAIInsights();
+      updateCharts();
+      
+      // Setup event listeners
+      setupEventListeners();
+      
+      // Expose global API for external integrations
+      exposeGlobalAPI();
+    });
+    
+    /**
+     * ============================================================
+     * GLOBAL API FOR EXTERNAL INTEGRATIONS
+     * ============================================================
+     * Use window.EnergyDashboard to interact with the dashboard
+     * from external scripts, backend, or AI models
+     */
+    function exposeGlobalAPI() {
+      window.EnergyDashboard = {
+        /**
+         * Update all dashboard data
+         * @param {Object} newData - Complete data object matching dashboardData structure
+         * 
+         * EXAMPLE USAGE:
+         * ```javascript
+         * // From your backend fetch
+         * fetch('/api/dashboard-data')
+         *   .then(res => res.json())
+         *   .then(data => {
+         *     window.EnergyDashboard.updateData(data);
+         *   });
+         * ```
+         */
+        updateData: function(newData) {
+          window.dashboardData = { ...window.dashboardData, ...newData };
+          refreshUI();
+        },
+        
+        /**
+         * Update only the sections/rooms data
+         * @param {Array} sections - Array of section objects
+         * 
+         * EXPECTED FORMAT:
+         * [
+         *   {
+         *     id: "section-1",
+         *     name: "Building A",
+         *     isExpanded: true,
+         *     rooms: [
+         *       {
+         *         id: "room-1",
+         *         name: "Conference Room",
+         *         data: {
+         *           energy: 450,
+         *           co2: 120,
+         *           occupancy: 65,
+         *           savings: 12,
+         *           hourlyData: [{ hour: 0, energy: 45, occupancy: 10 }, ...]
+         *         }
+         *       }
+         *     ]
+         *   }
+         * ]
+         */
+        updateSections: function(sections) {
+          window.dashboardData.sections = sections;
+          renderSidebar();
+          calculateTotals();
+          updateKPICards();
+          renderSectionsTable();
+          updateCharts();
+        },
+        
+        /**
+         * Update AI insights
+         * @param {Array} insights - Array of insight objects
+         * 
+         * EXPECTED FORMAT:
+         * [
+         *   {
+         *     type: "warning" | "success" | "info",
+         *     title: "English title",
+         *     titleAr: "Arabic title",
+         *     description: "English description",
+         *     descriptionAr: "Arabic description",
+         *     action: "English action text",
+         *     actionAr: "Arabic action text"
+         *   }
+         * ]
+         */
+        updateAIInsights: function(insights) {
+          window.dashboardData.aiInsights = insights;
+          renderAIInsights();
+        },
+        
+        /**
+         * Update a specific room's data
+         * @param {string} roomId - The room ID
+         * @param {Object} roomData - The room data object
+         */
+        updateRoom: function(roomId, roomData) {
+          for (const section of window.dashboardData.sections) {
+            const room = section.rooms.find(r => r.id === roomId);
+            if (room) {
+              room.data = { ...room.data, ...roomData };
+              break;
+            }
+          }
+          calculateTotals();
+          updateKPICards();
+          renderSectionsTable();
+          updateCharts();
+          
+          // Update room detail view if this room is currently selected
+          if (selectedRoom && selectedRoom.id === roomId) {
+            showRoomDetail(roomId);
+          }
+        },
+        
+        /**
+         * Get current dashboard data
+         * @returns {Object} Current dashboard data
+         */
+        getData: function() {
+          return window.dashboardData;
+        },
+        
+        /**
+         * Set language
+         * @param {string} lang - 'en' or 'ar'
+         */
+        setLanguage: function(lang) {
+          currentLang = lang;
+          applyTranslations();
+          updateDirection();
+        },
+        
+        /**
+         * Connect to WebSocket for real-time updates
+         * @param {string} url - WebSocket URL
+         * 
+         * EXAMPLE BACKEND MESSAGE FORMAT:
+         * {
+         *   type: "room_update",
+         *   roomId: "room-1",
+         *   data: { energy: 460, co2: 122, occupancy: 70, savings: 12 }
+         * }
+         * 
+         * OR for AI insights:
+         * {
+         *   type: "ai_insight",
+         *   insight: { type: "warning", title: "...", ... }
+         * }
+         */
+        connectWebSocket: function(url) {
+          const ws = new WebSocket(url || API_CONFIG.websocketUrl);
+          
+          ws.onmessage = function(event) {
+            const message = JSON.parse(event.data);
+            
+            switch (message.type) {
+              case 'room_update':
+                window.EnergyDashboard.updateRoom(message.roomId, message.data);
+                break;
+              case 'section_update':
+                window.EnergyDashboard.updateSections(message.sections);
+                break;
+              case 'ai_insight':
+                window.dashboardData.aiInsights.unshift(message.insight);
+                renderAIInsights();
+                break;
+              case 'full_update':
+                window.EnergyDashboard.updateData(message.data);
+                break;
+            }
+          };
+          
+          ws.onerror = function(error) {
+            console.error('WebSocket error:', error);
+          };
+          
+          return ws;
+        }
+      };
+    }
+    
+    /**
+     * ============================================================
+     * UI RENDERING FUNCTIONS
+     * ============================================================
+     */
+    
+    /**
+     * Refresh entire UI
+     */
+    function refreshUI() {
+      renderSidebar();
+      calculateTotals();
+      updateKPICards();
+      renderSectionsTable();
+      renderAIInsights();
+      updateCharts();
+    }
+    
+    /**
+     * Calculate totals from all sections/rooms
+     */
+    function calculateTotals() {
+      let totalEnergy = 0;
+      let totalCO2 = 0;
+      let totalOccupancy = 0;
+      let totalSavings = 0;
+      let roomCount = 0;
+      
+      for (const section of window.dashboardData.sections) {
+        for (const room of section.rooms) {
+          totalEnergy += room.data.energy;
+          totalCO2 += room.data.co2;
+          totalOccupancy += room.data.occupancy;
+          totalSavings += room.data.savings;
+          roomCount++;
+        }
+      }
+      
+      window.dashboardData.totals = {
+        energy: totalEnergy,
+        co2: totalCO2,
+        occupancy: roomCount > 0 ? Math.round(totalOccupancy / roomCount) : 0,
+        savings: roomCount > 0 ? Math.round(totalSavings / roomCount) : 0
+      };
+    }
+    
+    /**
+     * Update KPI cards with current totals
+     */
+    function updateKPICards() {
+      const totals = window.dashboardData.totals;
+      document.getElementById('kpiEnergy').textContent = totals.energy.toLocaleString();
+      document.getElementById('kpiCO2').textContent = totals.co2.toLocaleString();
+      document.getElementById('kpiOccupancy').textContent = totals.occupancy + '%';
+      document.getElementById('kpiSavings').textContent = totals.savings + '%';
+    }
+    
+    /**
+     * Render sidebar sections and rooms
+     */
+    function renderSidebar() {
+      const container = document.getElementById('sectionsContainer');
+      container.innerHTML = '';
+      
+      for (const section of window.dashboardData.sections) {
+        const sectionEl = document.createElement('div');
+        sectionEl.className = 'section-item mb-2';
+        sectionEl.innerHTML = `
+          <div class="flex items-center justify-between px-3 py-2 bg-secondary/50 rounded-lg cursor-pointer hover:bg-secondary group" onclick="toggleSection('${section.id}')">
+            <div class="flex items-center gap-2">
+              <i data-lucide="${section.isExpanded ? 'chevron-down' : 'chevron-right'}" class="w-4 h-4 section-chevron"></i>
+              <i data-lucide="building-2" class="w-4 h-4 text-primary"></i>
+              <span class="sidebar-text text-sm font-medium">${section.name}</span>
+            </div>
+            <div class="hidden group-hover:flex items-center gap-1 sidebar-text">
+              <button onclick="event.stopPropagation(); editSection('${section.id}')" class="p-1 hover:bg-background rounded">
+                <i data-lucide="pencil" class="w-3 h-3"></i>
+              </button>
+              <button onclick="event.stopPropagation(); deleteSection('${section.id}')" class="p-1 hover:bg-background rounded text-red-500">
+                <i data-lucide="trash-2" class="w-3 h-3"></i>
+              </button>
+            </div>
+          </div>
+          <div class="rooms-container ${section.isExpanded ? '' : 'hidden'} ml-4 mt-1 space-y-1">
+            ${section.rooms.map(room => `
+              <div class="room-item flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer hover:bg-secondary/50 group ${selectedRoom && selectedRoom.id === room.id ? 'active' : ''}" onclick="selectRoom('${room.id}')">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="door-open" class="w-4 h-4 text-muted-foreground"></i>
+                  <span class="sidebar-text text-sm">${room.name}</span>
+                </div>
+                <div class="hidden group-hover:flex items-center gap-1 sidebar-text">
+                  <button onclick="event.stopPropagation(); editRoom('${section.id}', '${room.id}')" class="p-1 hover:bg-background rounded">
+                    <i data-lucide="pencil" class="w-3 h-3"></i>
+                  </button>
+                  <button onclick="event.stopPropagation(); deleteRoom('${section.id}', '${room.id}')" class="p-1 hover:bg-background rounded text-red-500">
+                    <i data-lucide="trash-2" class="w-3 h-3"></i>
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+            <button onclick="openAddRoomModal('${section.id}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-primary rounded-lg hover:bg-secondary/30 sidebar-text">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span data-i18n="addRoom">${translations[currentLang].addRoom}</span>
+            </button>
+          </div>
+        `;
+        container.appendChild(sectionEl);
+      }
+      
+      // Reinitialize icons
+      lucide.createIcons();
+    }
+    
+    /**
+     * Render sections overview table
+     */
+    function renderSectionsTable() {
+      const tbody = document.getElementById('sectionsTableBody');
+      tbody.innerHTML = '';
+      
+      for (const section of window.dashboardData.sections) {
+        let sectionEnergy = 0;
+        for (const room of section.rooms) {
+          sectionEnergy += room.data.energy;
+        }
+        
+        // Determine status based on energy consumption
+        let status = 'normal';
+        let statusColor = 'text-green-500';
+        if (sectionEnergy > 1500) {
+          status = 'critical';
+          statusColor = 'text-red-500';
+        } else if (sectionEnergy > 1000) {
+          status = 'warning';
+          statusColor = 'text-yellow-500';
+        }
+        
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-border/50';
+        tr.innerHTML = `
+          <td class="py-3 font-medium">${section.name}</td>
+          <td class="py-3">${section.rooms.length}</td>
+          <td class="py-3">${sectionEnergy.toLocaleString()} kWh</td>
+          <td class="py-3">
+            <span class="${statusColor} text-sm capitalize" data-i18n="${status}">${translations[currentLang][status]}</span>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+    
+    /**
+     * Render AI insights panel
+     */
+    function renderAIInsights() {
+      const container = document.getElementById('aiInsightsContainer');
+      container.innerHTML = '';
+      
+      const typeStyles = {
+        warning: 'border-yellow-500/50 bg-yellow-500/10',
+        success: 'border-green-500/50 bg-green-500/10',
+        info: 'border-blue-500/50 bg-blue-500/10'
+      };
+      
+      const typeIcons = {
+        warning: 'alert-triangle',
+        success: 'check-circle',
+        info: 'info'
+      };
+      
+      const typeColors = {
+        warning: 'text-yellow-500',
+        success: 'text-green-500',
+        info: 'text-blue-500'
+      };
+      
+      for (const insight of window.dashboardData.aiInsights) {
+        const div = document.createElement('div');
+        div.className = `p-3 rounded-lg border ${typeStyles[insight.type]}`;
+        div.innerHTML = `
+          <div class="flex items-start gap-2">
+            <i data-lucide="${typeIcons[insight.type]}" class="w-4 h-4 mt-0.5 ${typeColors[insight.type]}"></i>
+            <div class="flex-1">
+              <p class="font-medium text-sm">${currentLang === 'ar' ? insight.titleAr : insight.title}</p>
+              <p class="text-xs text-muted-foreground mt-1">${currentLang === 'ar' ? insight.descriptionAr : insight.description}</p>
+              <p class="text-xs text-primary mt-2">${currentLang === 'ar' ? insight.actionAr : insight.action}</p>
+            </div>
+          </div>
+        `;
+        container.appendChild(div);
+      }
+      
+      lucide.createIcons();
+    }
+    
+    /**
+     * ============================================================
+     * CHART FUNCTIONS
+     * ============================================================
+     */
+    
+    /**
+     * Initialize all charts
+     */
+    function initCharts() {
+      // Energy consumption chart
+      const energyCtx = document.getElementById('energyChart').getContext('2d');
+      energyChart = new Chart(energyCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Energy (kWh)',
+            data: [],
+            borderColor: '#f97316',
+            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: chartDefaults
+      });
+      
+      // Occupancy trend chart
+      const occupancyCtx = document.getElementById('occupancyChart').getContext('2d');
+      occupancyChart = new Chart(occupancyCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Occupancy (%)',
+            data: [],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: chartDefaults
+      });
+      
+      // Room energy chart
+      const roomEnergyCtx = document.getElementById('roomEnergyChart').getContext('2d');
+      roomEnergyChart = new Chart(roomEnergyCtx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Energy (kWh)',
+            data: [],
+            backgroundColor: '#f97316'
+          }]
+        },
+        options: chartDefaults
+      });
+      
+      // Room occupancy chart
+      const roomOccupancyCtx = document.getElementById('roomOccupancyChart').getContext('2d');
+      roomOccupancyChart = new Chart(roomOccupancyCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Occupancy (%)',
+            data: [],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: chartDefaults
+      });
+    }
+    
+    /**
+     * Update main dashboard charts
+     */
+    function updateCharts() {
+      // Aggregate hourly data from all rooms
+      const aggregatedData = Array.from({ length: 24 }, () => ({ energy: 0, occupancy: 0, count: 0 }));
+      
+      for (const section of window.dashboardData.sections) {
+        for (const room of section.rooms) {
+          if (room.data.hourlyData) {
+            room.data.hourlyData.forEach((data, index) => {
+              aggregatedData[index].energy += data.energy;
+              aggregatedData[index].occupancy += data.occupancy;
+              aggregatedData[index].count++;
+            });
+          }
+        }
+      }
+      
+      const labels = aggregatedData.map((_, i) => `${i.toString().padStart(2, '0')}:00`);
+      const energyData = aggregatedData.map(d => d.energy);
+      const occupancyData = aggregatedData.map(d => d.count > 0 ? Math.round(d.occupancy / d.count) : 0);
+      
+      // Update energy chart
+      energyChart.data.labels = labels;
+      energyChart.data.datasets[0].data = energyData;
+      energyChart.update();
+      
+      // Update occupancy chart
+      occupancyChart.data.labels = labels;
+      occupancyChart.data.datasets[0].data = occupancyData;
+      occupancyChart.update();
+    }
+    
+    /**
+     * Update room detail charts
+     */
+    function updateRoomCharts(room) {
+      if (!room || !room.data.hourlyData) return;
+      
+      const labels = room.data.hourlyData.map(d => `${d.hour.toString().padStart(2, '0')}:00`);
+      const energyData = room.data.hourlyData.map(d => d.energy);
+      const occupancyData = room.data.hourlyData.map(d => d.occupancy);
+      
+      roomEnergyChart.data.labels = labels;
+      roomEnergyChart.data.datasets[0].data = energyData;
+      roomEnergyChart.update();
+      
+      roomOccupancyChart.data.labels = labels;
+      roomOccupancyChart.data.datasets[0].data = occupancyData;
+      roomOccupancyChart.update();
+    }
+    
+    /**
+     * ============================================================
+     * TIME-BASED DATA FUNCTIONS
+     * ============================================================
+     * These functions update charts based on selected time range
+     * 
+     * BACKEND INTEGRATION:
+     * Replace the mock data generation with actual API calls:
+     * ```javascript
+     * async function fetchDataForTimeRange(range, roomId = null) {
+     *   const endpoint = roomId 
+     *     ? `/api/rooms/${roomId}/energy?range=${range}`
+     *     : `/api/energy?range=${range}`;
+     *   const response = await fetch(endpoint);
+     *   return response.json();
+     * }
+     * ```
+     */
+    
+    /**
+     * Update main dashboard charts based on time range
+     * @param {string} range - 'day' | 'week' | 'month' | 'year'
+     */
+    function updateChartsForTimeRange(range) {
+      let data;
+      let label;
+      
+      switch (range) {
+        case 'day':
+          data = generateHourlyData();
+          label = currentLang === 'ar' ? 'بيانات اليوم' : 'Today\'s Data';
+          // Format labels for hours
+          energyChart.data.labels = data.map(d => `${d.hour.toString().padStart(2, '0')}:00`);
+          occupancyChart.data.labels = data.map(d => `${d.hour.toString().padStart(2, '0')}:00`);
+          break;
+          
+        case 'week':
+          data = generateWeeklyData();
+          label = currentLang === 'ar' ? 'بيانات الأسبوع' : 'This Week';
+          energyChart.data.labels = data.map(d => d.label);
+          occupancyChart.data.labels = data.map(d => d.label);
+          break;
+          
+        case 'month':
+          data = generateMonthlyData();
+          label = currentLang === 'ar' ? 'بيانات الشهر' : 'This Month';
+          energyChart.data.labels = data.map(d => d.label);
+          occupancyChart.data.labels = data.map(d => d.label);
+          break;
+          
+        case 'year':
+          data = generateYearlyData();
+          label = currentLang === 'ar' ? 'بيانات السنة' : 'This Year';
+          energyChart.data.labels = data.map(d => d.label);
+          occupancyChart.data.labels = data.map(d => d.label);
+          break;
+      }
+      
+      // Update chart data
+      energyChart.data.datasets[0].data = data.map(d => d.energy);
+      occupancyChart.data.datasets[0].data = data.map(d => d.occupancy);
+      
+      // Update chart title/subtitle if needed
+      energyChart.update();
+      occupancyChart.update();
+      
+      // Update subtitle text
+      updateChartSubtitles(label);
+    }
+    
+    /**
+     * Update main dashboard charts for custom date range
+     * @param {Date} startDate - Start date
+     * @param {Date} endDate - End date
+     */
+    function updateChartsForCustomRange(startDate, endDate) {
+      const data = generateCustomRangeData(startDate, endDate);
+      
+      const label = `${startDate.toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : 'en-US')} - ${endDate.toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : 'en-US')}`;
+      
+      energyChart.data.labels = data.map(d => d.label);
+      energyChart.data.datasets[0].data = data.map(d => d.energy);
+      occupancyChart.data.labels = data.map(d => d.label);
+      occupancyChart.data.datasets[0].data = data.map(d => d.occupancy);
+      
+      energyChart.update();
+      occupancyChart.update();
+      
+      updateChartSubtitles(label);
+      
+      // Calculate and update totals for the period
+      updateTotalsForPeriod(data);
+    }
+    
+    /**
+     * Update room charts based on time range
+     * @param {string} range - 'day' | 'week' | 'month' | 'year'
+     */
+    function updateRoomChartsForTimeRange(range) {
+      if (!selectedRoom) return;
+      
+      let data;
+      
+      switch (range) {
+        case 'day':
+          data = selectedRoom.data.hourlyData || generateHourlyData();
+          roomEnergyChart.data.labels = data.map(d => `${d.hour.toString().padStart(2, '0')}:00`);
+          roomOccupancyChart.data.labels = data.map(d => `${d.hour.toString().padStart(2, '0')}:00`);
+          break;
+          
+        case 'week':
+          data = generateWeeklyData();
+          roomEnergyChart.data.labels = data.map(d => d.label);
+          roomOccupancyChart.data.labels = data.map(d => d.label);
+          break;
+          
+        case 'month':
+          data = generateMonthlyData();
+          roomEnergyChart.data.labels = data.map(d => d.label);
+          roomOccupancyChart.data.labels = data.map(d => d.label);
+          break;
+          
+        case 'year':
+          data = generateYearlyData();
+          roomEnergyChart.data.labels = data.map(d => d.label);
+          roomOccupancyChart.data.labels = data.map(d => d.label);
+          break;
+      }
+      
+      roomEnergyChart.data.datasets[0].data = data.map(d => d.energy);
+      roomOccupancyChart.data.datasets[0].data = data.map(d => d.occupancy);
+      
+      roomEnergyChart.update();
+      roomOccupancyChart.update();
+      
+      // Update room KPIs for the period
+      updateRoomKPIsForPeriod(data);
+    }
+    
+    /**
+     * Update room charts for custom date range
+     * @param {Date} startDate - Start date
+     * @param {Date} endDate - End date
+     */
+    function updateRoomChartsForCustomRange(startDate, endDate) {
+      if (!selectedRoom) return;
+      
+      const data = generateCustomRangeData(startDate, endDate);
+      
+      roomEnergyChart.data.labels = data.map(d => d.label);
+      roomEnergyChart.data.datasets[0].data = data.map(d => d.energy);
+      roomOccupancyChart.data.labels = data.map(d => d.label);
+      roomOccupancyChart.data.datasets[0].data = data.map(d => d.occupancy);
+      
+      roomEnergyChart.update();
+      roomOccupancyChart.update();
+      
+      // Update room KPIs for the custom period
+      updateRoomKPIsForPeriod(data);
+    }
+    
+    /**
+     * Update chart subtitles to show current time range
+     * @param {string} text - The subtitle text
+     */
+    function updateChartSubtitles(text) {
+      const subtitle = document.querySelector('[data-i18n="last24h"]');
+      if (subtitle) {
+        subtitle.textContent = text;
+        subtitle.removeAttribute('data-i18n'); // Remove i18n to prevent override
+      }
+    }
+    
+    /**
+     * Update totals KPI cards for a specific period
+     * @param {Array} data - Period data array
+     * 
+     * BACKEND INTEGRATION:
+     * This should receive actual aggregated data from your API
+     */
+    function updateTotalsForPeriod(data) {
+      const totalEnergy = data.reduce((sum, d) => sum + d.energy, 0);
+      const avgOccupancy = Math.round(data.reduce((sum, d) => sum + d.occupancy, 0) / data.length);
+      const co2 = Math.round(totalEnergy * 0.27); // Approximate CO2 factor
+      const savings = Math.round(Math.random() * 20 + 5); // Mock savings
+      
+      document.getElementById('kpiEnergy').textContent = totalEnergy.toLocaleString();
+      document.getElementById('kpiCO2').textContent = co2.toLocaleString();
+      document.getElementById('kpiOccupancy').textContent = avgOccupancy + '%';
+      document.getElementById('kpiSavings').textContent = savings + '%';
+    }
+    
+    /**
+     * Update room KPI cards for a specific period
+     * @param {Array} data - Period data array
+     */
+    function updateRoomKPIsForPeriod(data) {
+      const totalEnergy = data.reduce((sum, d) => sum + d.energy, 0);
+      const avgOccupancy = Math.round(data.reduce((sum, d) => sum + d.occupancy, 0) / data.length);
+      const co2 = Math.round(totalEnergy * 0.27);
+      const savings = Math.round(Math.random() * 20 + 5);
+      
+      document.getElementById('roomEnergy').textContent = totalEnergy.toLocaleString();
+      document.getElementById('roomCO2').textContent = co2.toLocaleString();
+      document.getElementById('roomOccupancy').textContent = avgOccupancy + '%';
+      document.getElementById('roomSavings').textContent = savings + '%';
+    }
+    
+    /**
+     * ============================================================
+     * EVENT HANDLERS
+     * ============================================================
+     */
+    
+    function setupEventListeners() {
+      // Sidebar toggle
+      document.getElementById('toggleSidebar').addEventListener('click', function() {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('collapsed');
+        const icon = this.querySelector('i');
+        if (sidebar.classList.contains('collapsed')) {
+          icon.setAttribute('data-lucide', 'panel-left-open');
+        } else {
+          icon.setAttribute('data-lucide', 'panel-left-close');
+        }
+        lucide.createIcons();
+      });
+      
+      // Language toggle
+      document.getElementById('langToggle').addEventListener('click', function() {
+        currentLang = currentLang === 'en' ? 'ar' : 'en';
+        applyTranslations();
+        updateDirection();
+        renderSidebar();
+        renderSectionsTable();
+        renderAIInsights();
+      });
+      
+      // Total dashboard button
+      document.getElementById('totalDashboardBtn').addEventListener('click', function() {
+        showTotalDashboard();
+      });
+      
+      // Add section button
+      document.getElementById('addSectionBtn').addEventListener('click', function() {
+        openAddSectionModal();
+      });
+      
+      // Back to total button
+      document.getElementById('backToTotal').addEventListener('click', function() {
+        showTotalDashboard();
+      });
+      
+      // Time range buttons for main dashboard
+      document.querySelectorAll('.time-range-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.time-range-btn').forEach(b => {
+            b.classList.remove('active', 'bg-primary', 'text-primary-foreground');
+            b.classList.add('bg-secondary');
+          });
+          this.classList.add('active', 'bg-primary', 'text-primary-foreground');
+          this.classList.remove('bg-secondary');
+          selectedTimeRange = this.dataset.range;
+          selectedStartDate = null;
+          selectedEndDate = null;
+          updateChartsForTimeRange(selectedTimeRange);
+        });
+      });
+      
+      // Custom date range for main dashboard
+      document.getElementById('applyDateRange').addEventListener('click', function() {
+        const startInput = document.getElementById('startDate');
+        const endInput = document.getElementById('endDate');
+        
+        if (startInput.value && endInput.value) {
+          selectedStartDate = new Date(startInput.value);
+          selectedEndDate = new Date(endInput.value);
+          
+          if (selectedEndDate >= selectedStartDate) {
+            // Clear active state from time range buttons
+            document.querySelectorAll('.time-range-btn').forEach(b => {
+              b.classList.remove('active', 'bg-primary', 'text-primary-foreground');
+              b.classList.add('bg-secondary');
+            });
+            selectedTimeRange = 'custom';
+            updateChartsForCustomRange(selectedStartDate, selectedEndDate);
+          } else {
+            alert(currentLang === 'ar' ? 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية' : 'End date must be after start date');
+          }
+        }
+      });
+      
+      // Time range buttons for room view
+      document.querySelectorAll('.room-time-range-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.room-time-range-btn').forEach(b => {
+            b.classList.remove('active', 'bg-primary', 'text-primary-foreground');
+            b.classList.add('bg-secondary');
+          });
+          this.classList.add('active', 'bg-primary', 'text-primary-foreground');
+          this.classList.remove('bg-secondary');
+          roomSelectedTimeRange = this.dataset.range;
+          roomSelectedStartDate = null;
+          roomSelectedEndDate = null;
+          updateRoomChartsForTimeRange(roomSelectedTimeRange);
+        });
+      });
+      
+      // Custom date range for room view
+      document.getElementById('applyRoomDateRange').addEventListener('click', function() {
+        const startInput = document.getElementById('roomStartDate');
+        const endInput = document.getElementById('roomEndDate');
+        
+        if (startInput.value && endInput.value) {
+          roomSelectedStartDate = new Date(startInput.value);
+          roomSelectedEndDate = new Date(endInput.value);
+          
+          if (roomSelectedEndDate >= roomSelectedStartDate) {
+            document.querySelectorAll('.room-time-range-btn').forEach(b => {
+              b.classList.remove('active', 'bg-primary', 'text-primary-foreground');
+              b.classList.add('bg-secondary');
+            });
+            roomSelectedTimeRange = 'custom';
+            updateRoomChartsForCustomRange(roomSelectedStartDate, roomSelectedEndDate);
+          } else {
+            alert(currentLang === 'ar' ? 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية' : 'End date must be after start date');
+          }
+        }
+      });
+      
+      // Set default dates to today
+      const today = new Date().toISOString().split('T')[0];
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      const lastMonthStr = lastMonth.toISOString().split('T')[0];
+      
+      document.getElementById('startDate').value = lastMonthStr;
+      document.getElementById('endDate').value = today;
+      document.getElementById('roomStartDate').value = lastMonthStr;
+      document.getElementById('roomEndDate').value = today;
+      
+      // Chart type buttons
+      document.querySelectorAll('.chart-type-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.chart-type-btn').forEach(b => {
+            b.classList.remove('active', 'bg-primary', 'text-primary-foreground');
+            b.classList.add('bg-secondary');
+          });
+          this.classList.add('active', 'bg-primary', 'text-primary-foreground');
+          this.classList.remove('bg-secondary');
+          energyChart.config.type = this.dataset.type;
+          energyChart.update();
+        });
+      });
+    }
+    
+    /**
+     * Apply translations to all elements with data-i18n attribute
+     */
+    function applyTranslations() {
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[currentLang][key]) {
+          el.textContent = translations[currentLang][key];
+        }
+      });
+    }
+    
+    /**
+     * Update document direction based on language
+     */
+    function updateDirection() {
+      const html = document.documentElement;
+      if (currentLang === 'ar') {
+        html.setAttribute('dir', 'rtl');
+        html.setAttribute('lang', 'ar');
+      } else {
+        html.setAttribute('dir', 'ltr');
+        html.setAttribute('lang', 'en');
+      }
+    }
+    
+    /**
+     * ============================================================
+     * VIEW SWITCHING
+     * ============================================================
+     */
+    
+    function showTotalDashboard() {
+      selectedRoom = null;
+      document.getElementById('totalDashboardView').classList.remove('hidden');
+      document.getElementById('roomDetailView').classList.add('hidden');
+      renderSidebar();
+    }
+    
+    function showRoomDetail(roomId) {
+      let room = null;
+      let sectionName = '';
+      
+      for (const section of window.dashboardData.sections) {
+        const found = section.rooms.find(r => r.id === roomId);
+        if (found) {
+          room = found;
+          sectionName = section.name;
+          break;
+        }
+      }
+      
+      if (!room) return;
+      
+      selectedRoom = room;
+      
+      // Update room detail view
+      document.getElementById('roomTitle').textContent = room.name;
+      document.getElementById('roomSection').textContent = sectionName;
+      document.getElementById('roomEnergy').textContent = room.data.energy.toLocaleString();
+      document.getElementById('roomCO2').textContent = room.data.co2.toLocaleString();
+      document.getElementById('roomOccupancy').textContent = room.data.occupancy + '%';
+      document.getElementById('roomSavings').textContent = room.data.savings + '%';
+      
+      // Update room charts
+      updateRoomCharts(room);
+      
+      // Render room recommendations
+      renderRoomRecommendations(room);
+      
+      // Show room view
+      document.getElementById('totalDashboardView').classList.add('hidden');
+      document.getElementById('roomDetailView').classList.remove('hidden');
+      
+      renderSidebar();
+    }
+    
+    function selectRoom(roomId) {
+      showRoomDetail(roomId);
+    }
+    
+    function renderRoomRecommendations(room) {
+      const container = document.getElementById('roomRecommendations');
+      
+      // Generate recommendations based on room data
+      const recommendations = [];
+      
+      if (room.data.energy > 500) {
+        recommendations.push({
+          icon: 'alert-triangle',
+          color: 'text-yellow-500',
+          text: currentLang === 'ar' 
+            ? 'استهلاك الطاقة مرتفع. فكر في تقليل ساعات التشغيل.'
+            : 'High energy consumption. Consider reducing operating hours.',
+        });
+      }
+      
+      if (room.data.occupancy < 30) {
+        recommendations.push({
+          icon: 'users',
+          color: 'text-blue-500',
+          text: currentLang === 'ar'
+            ? 'إشغال منخفض. يمكن دمج الأنشطة في غرف أخرى.'
+            : 'Low occupancy detected. Consider consolidating activities.',
+        });
+      }
+      
+      if (room.data.savings < 10) {
+        recommendations.push({
+          icon: 'lightbulb',
+          color: 'text-primary',
+          text: currentLang === 'ar'
+            ? 'إمكانية تحسين كفاءة الطاقة. راجع إعدادات التكييف.'
+            : 'Energy efficiency can be improved. Review HVAC settings.',
+        });
+      }
+      
+      if (recommendations.length === 0) {
+        recommendations.push({
+          icon: 'check-circle',
+          color: 'text-green-500',
+          text: currentLang === 'ar'
+            ? 'أداء الغرفة ممتاز! استمر في المراقبة.'
+            : 'Room performance is excellent! Keep monitoring.',
+        });
+      }
+      
+      container.innerHTML = recommendations.map(rec => `
+        <div class="flex items-start gap-3 p-3 bg-secondary/50 rounded-lg">
+          <i data-lucide="${rec.icon}" class="w-5 h-5 ${rec.color} mt-0.5"></i>
+          <p class="text-sm">${rec.text}</p>
+        </div>
+      `).join('');
+      
+      lucide.createIcons();
+    }
+    
+    /**
+     * ============================================================
+     * SECTION MANAGEMENT
+     * ============================================================
+     */
+    
+    function toggleSection(sectionId) {
+      const section = window.dashboardData.sections.find(s => s.id === sectionId);
+      if (section) {
+        section.isExpanded = !section.isExpanded;
+        renderSidebar();
+      }
+    }
+    
+    function openAddSectionModal() {
+      editingSection = null;
+      document.getElementById('sectionModalTitle').setAttribute('data-i18n', 'addSection');
+      document.getElementById('sectionModalTitle').textContent = translations[currentLang].addSection;
+      document.getElementById('sectionNameInput').value = '';
+      document.getElementById('sectionModal').classList.remove('hidden');
+    }
+    
+    function editSection(sectionId) {
+      const section = window.dashboardData.sections.find(s => s.id === sectionId);
+      if (section) {
+        editingSection = sectionId;
+        document.getElementById('sectionModalTitle').setAttribute('data-i18n', 'editSection');
+        document.getElementById('sectionModalTitle').textContent = translations[currentLang].editSection;
+        document.getElementById('sectionNameInput').value = section.name;
+        document.getElementById('sectionModal').classList.remove('hidden');
+      }
+    }
+    
+    function closeSectionModal() {
+      document.getElementById('sectionModal').classList.add('hidden');
+      editingSection = null;
+    }
+    
+    function saveSection() {
+      const name = document.getElementById('sectionNameInput').value.trim();
+      if (!name) return;
+      
+      if (editingSection) {
+        const section = window.dashboardData.sections.find(s => s.id === editingSection);
+        if (section) {
+          section.name = name;
+        }
+      } else {
+        const newSection = {
+          id: 'section-' + Date.now(),
+          name: name,
+          isExpanded: true,
+          rooms: []
+        };
+        window.dashboardData.sections.push(newSection);
+      }
+      
+      closeSectionModal();
+      renderSidebar();
+      renderSectionsTable();
+    }
+    
+    function deleteSection(sectionId) {
+      if (confirm(currentLang === 'ar' ? 'هل أنت متأكد من حذف هذا القسم؟' : 'Are you sure you want to delete this section?')) {
+        window.dashboardData.sections = window.dashboardData.sections.filter(s => s.id !== sectionId);
+        calculateTotals();
+        updateKPICards();
+        renderSidebar();
+        renderSectionsTable();
+        updateCharts();
+      }
+    }
+    
+    /**
+     * ============================================================
+     * ROOM MANAGEMENT
+     * ============================================================
+     */
+    
+    function openAddRoomModal(sectionId) {
+      editingRoom = null;
+      editingSectionId = sectionId;
+      document.getElementById('roomModalTitle').setAttribute('data-i18n', 'addRoom');
+      document.getElementById('roomModalTitle').textContent = translations[currentLang].addRoom;
+      document.getElementById('roomNameInput').value = '';
+      document.getElementById('roomModal').classList.remove('hidden');
+    }
+    
+    function editRoom(sectionId, roomId) {
+      const section = window.dashboardData.sections.find(s => s.id === sectionId);
+      if (section) {
+        const room = section.rooms.find(r => r.id === roomId);
+        if (room) {
+          editingRoom = roomId;
+          editingSectionId = sectionId;
+          document.getElementById('roomModalTitle').setAttribute('data-i18n', 'editRoom');
+          document.getElementById('roomModalTitle').textContent = translations[currentLang].editRoom;
+          document.getElementById('roomNameInput').value = room.name;
+          document.getElementById('roomModal').classList.remove('hidden');
+        }
+      }
+    }
+    
+    function closeRoomModal() {
+      document.getElementById('roomModal').classList.add('hidden');
+      editingRoom = null;
+      editingSectionId = null;
+    }
+    
+    function saveRoom() {
+      const name = document.getElementById('roomNameInput').value.trim();
+      if (!name || !editingSectionId) return;
+      
+      const section = window.dashboardData.sections.find(s => s.id === editingSectionId);
+      if (!section) return;
+      
+      if (editingRoom) {
+        const room = section.rooms.find(r => r.id === editingRoom);
+        if (room) {
+          room.name = name;
+        }
+      } else {
+        const newRoom = {
+          id: 'room-' + Date.now(),
+          name: name,
+          data: {
+            energy: 0,
+            co2: 0,
+            occupancy: 0,
+            savings: 0,
+            hourlyData: generateHourlyData()
+          }
+        };
+        section.rooms.push(newRoom);
+      }
+      
+      closeRoomModal();
+      calculateTotals();
+      updateKPICards();
+      renderSidebar();
+      renderSectionsTable();
+      updateCharts();
+    }
+    
+    function deleteRoom(sectionId, roomId) {
+      if (confirm(currentLang === 'ar' ? 'هل أنت متأكد من حذف هذه الغرفة؟' : 'Are you sure you want to delete this room?')) {
+        const section = window.dashboardData.sections.find(s => s.id === sectionId);
+        if (section) {
+          section.rooms = section.rooms.filter(r => r.id !== roomId);
+          
+          if (selectedRoom && selectedRoom.id === roomId) {
+            showTotalDashboard();
+          }
+          
+          calculateTotals();
+          updateKPICards();
+          renderSidebar();
+          renderSectionsTable();
+          updateCharts();
+        }
+      }
+    }
+    
+    /**
+     * ============================================================
+     * API INTEGRATION HELPERS
+     * ============================================================
+     * Use these functions to connect to your backend
+     */
+    
+    /**
+     * Fetch data from backend
+     * @param {string} endpoint - API endpoint path
+     * @param {Object} options - Fetch options
+     * @returns {Promise} Fetch promise
+     * 
+     * USAGE:
+     * ```javascript
+     * apiCall('/api/sections')
+     *   .then(data => {
+     *     window.EnergyDashboard.updateSections(data);
+     *   });
+     * ```
+     */
+    async function apiCall(endpoint, options = {}) {
+      const url = API_CONFIG.baseUrl + endpoint;
+      const config = {
+        ...options,
+        headers: {
+          ...API_CONFIG.headers,
+          ...options.headers
+        }
+      };
+      
+      try {
+        const response = await fetch(url, config);
+        if (!response.ok) {
+          throw new Error(`API Error: ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error('API Call Failed:', error);
+        throw error;
+      }
+    }
+    
+    /**
+     * Example: Fetch sections from backend
+     */
+    async function fetchSections() {
+      try {
+        const data = await apiCall(API_CONFIG.endpoints.getSections);
+        window.EnergyDashboard.updateSections(data);
+      } catch (error) {
+        console.error('Failed to fetch sections:', error);
+      }
+    }
+    
+    /**
+     * Example: Fetch AI insights from backend
+     */
+    async function fetchAIInsights() {
+      try {
+        const data = await apiCall(API_CONFIG.endpoints.getAIInsights);
+        window.EnergyDashboard.updateAIInsights(data);
+      } catch (error) {
+        console.error('Failed to fetch AI insights:', error);
+      }
+    }
+    
+    /**
+     * Example: Send data to AI model for analysis
+     * @param {Object} roomData - Room data to analyze
+     * @returns {Promise} AI analysis result
+     */
+    async function analyzeWithAI(roomData) {
+      try {
+        const response = await apiCall('/api/ai/analyze', {
+          method: 'POST',
+          body: JSON.stringify(roomData)
+        });
+        return response;
+      } catch (error) {
+        console.error('AI Analysis Failed:', error);
+        throw error;
+      }
+    }
+    
+    /**
+     * ============================================================
+     * DATE RANGE API FUNCTIONS
+     * ============================================================
+     * Use these to fetch data for specific date ranges from backend
+     */
+    
+    /**
+     * Fetch energy data for a specific date range
+     * @param {Date} startDate - Start date
+     * @param {Date} endDate - End date
+     * @param {string|null} roomId - Optional room ID (null for all rooms)
+     * @returns {Promise<Object>} Energy data for the period
+     * 
+     * EXPECTED RESPONSE FORMAT:
+     * {
+     *   success: true,
+     *   period: {
+     *     start: "2024-01-01",
+     *     end: "2024-01-31"
+     *   },
+     *   data: [
+     *     { date: "2024-01-01", energy: 450, occupancy: 65, co2: 120 },
+     *     { date: "2024-01-02", energy: 380, occupancy: 58, co2: 102 },
+     *     ...
+     *   ],
+     *   totals: {
+     *     energy: 12500,
+     *     co2: 3375,
+     *     avgOccupancy: 62,
+     *     savings: 15
+     *   }
+     * }
+     */
+    async function fetchDataForDateRange(startDate, endDate, roomId = null) {
+      const params = new URLSearchParams({
+        start: startDate.toISOString().split('T')[0],
+        end: endDate.toISOString().split('T')[0],
+        ...(roomId && { roomId })
+      });
+      
+      try {
+        const data = await apiCall(`/api/energy/range?${params}`);
+        return data;
+      } catch (error) {
+        console.error('Failed to fetch date range data:', error);
+        // Return mock data for demo purposes
+        return {
+          success: true,
+          data: generateCustomRangeData(startDate, endDate)
+        };
+      }
+    }
+    
+    /**
+     * Fetch monthly summary data
+     * @param {number} year - Year (e.g., 2024)
+     * @param {number} month - Month (1-12)
+     * @param {string|null} roomId - Optional room ID
+     * @returns {Promise<Object>} Monthly summary
+     * 
+     * EXPECTED RESPONSE FORMAT:
+     * {
+     *   year: 2024,
+     *   month: 1,
+     *   monthName: "January",
+     *   dailyData: [...],
+     *   totals: {...},
+     *   comparison: {
+     *     previousMonth: { energy: 11000, change: -12 },
+     *     previousYear: { energy: 13000, change: -8 }
+     *   }
+     * }
+     */
+    async function fetchMonthlyData(year, month, roomId = null) {
+      const params = new URLSearchParams({
+        year: year.toString(),
+        month: month.toString(),
+        ...(roomId && { roomId })
+      });
+      
+      try {
+        return await apiCall(`/api/energy/monthly?${params}`);
+      } catch (error) {
+        console.error('Failed to fetch monthly data:', error);
+        return { data: generateMonthlyData() };
+      }
+    }
+    
+    /**
+     * Fetch yearly summary data
+     * @param {number} year - Year (e.g., 2024)
+     * @param {string|null} roomId - Optional room ID
+     * @returns {Promise<Object>} Yearly summary with monthly breakdown
+     */
+    async function fetchYearlyData(year, roomId = null) {
+      const params = new URLSearchParams({
+        year: year.toString(),
+        ...(roomId && { roomId })
+      });
+      
+      try {
+        return await apiCall(`/api/energy/yearly?${params}`);
+      } catch (error) {
+        console.error('Failed to fetch yearly data:', error);
+        return { data: generateYearlyData() };
+      }
+    }
+    
+    /**
+     * ============================================================
+     * GLOBAL API EXPOSURE FOR EXTERNAL INTEGRATION
+     * ============================================================
+     * These functions are exposed on window.EnergyDashboard
+     * for external scripts and backend integration
+     */
+    
+    // Add date-related functions to the global API
+    if (window.EnergyDashboard) {
+      Object.assign(window.EnergyDashboard, {
+        // Set date range and update charts
+        setDateRange: function(startDate, endDate) {
+          selectedStartDate = new Date(startDate);
+          selectedEndDate = new Date(endDate);
+          updateChartsForCustomRange(selectedStartDate, selectedEndDate);
+        },
+        
+        // Set time range (day, week, month, year)
+        setTimeRange: function(range) {
+          selectedTimeRange = range;
+          updateChartsForTimeRange(range);
+        },
+        
+        // Get current date range
+        getDateRange: function() {
+          return {
+            start: selectedStartDate,
+            end: selectedEndDate,
+            range: selectedTimeRange
+          };
+        },
+        
+        // Update data for specific date
+        updateDataForDate: function(date, data) {
+          // This function can be used to update data for a specific date
+          // Useful for real-time updates from WebSocket
+          console.log('Updating data for date:', date, data);
+          // Implementation depends on your data structure
+        },
+        
+        // Fetch and display data for date range
+        fetchAndDisplayDateRange: async function(startDate, endDate, roomId = null) {
+          const data = await fetchDataForDateRange(startDate, endDate, roomId);
+          if (data.success) {
+            if (roomId) {
+              updateRoomChartsForCustomRange(new Date(startDate), new Date(endDate));
+            } else {
+              updateChartsForCustomRange(new Date(startDate), new Date(endDate));
+            }
+          }
+          return data;
+        }
+      });
+    }
+  </script>
+</body>
+</html>
